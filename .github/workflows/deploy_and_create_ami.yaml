@@ -79,11 +79,28 @@ jobs:
 
     - name: Deregister Previous AMI if exists
       run: |
-        previous_ami_id="${{ env.PREVIOUS_AMI_ID }}"
+        # Retrieve the ImageId of the launch template
+        previous_ami_id=$(aws ec2 describe-launch-template-versions --launch-template-id lt-0de5977b4f1add85d --query "LaunchTemplateVersions[0].LaunchTemplateData.ImageId" --output text)
+
+        # Check if the previous AMI ID exists
         if [ -n "$previous_ami_id" ]; then
           echo "Deregistering previous AMI: $previous_ami_id"
+          
+          # Deregister the AMI
           aws ec2 deregister-image --image-id $previous_ami_id
           echo "Previous AMI $previous_ami_id deregistered"
+
+          # Retrieve the snapshot ID associated with the AMI
+          snapshot_id=$(aws ec2 describe-images --image-ids $previous_ami_id --query "Images[0].BlockDeviceMappings[0].Ebs.SnapshotId" --output text)
+          
+          # Deregister the snapshot if it exists
+          if [ -n "$snapshot_id" ]; then
+            echo "Deregistering snapshot: $snapshot_id"
+            aws ec2 delete-snapshot --snapshot-id $snapshot_id
+            echo "Snapshot $snapshot_id deleted"
+          else
+            echo "No snapshot associated with AMI $previous_ami_id"
+          fi
         else
           echo "No previous AMI to deregister."
         fi
@@ -93,10 +110,3 @@ jobs:
         instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
         aws ec2 stop-instances --instance-ids $instance_id
         aws ec2 wait instance-stopped --instance-ids $instance_id
-
-    - name: Store current AMI ID for future reference
-      run: |
-        echo "Storing the new AMI ID for future use."
-        echo "PREVIOUS_AMI_ID=${{ env.ami_id }}" >> $GITHUB_ENV
-        echo "old_ami=${{ env.ami_id }}" >> $GITHUB_ENV
- 
