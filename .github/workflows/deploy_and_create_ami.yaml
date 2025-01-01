@@ -34,24 +34,6 @@ jobs:
         command="export HOME=/root && cd /root && pm2 stop 0 && rm -rf Hive_Transcoder && git clone https://$token@github.com/HiveOrg89/Hive_Transcoder && cd Hive_Transcoder && npm install && pm2 start 0 && pm2 save"
         aws ssm send-command --instance-ids $instance_id --document-name "AWS-RunShellScript" --parameters 'commands=["'"$command"'"]'
 
-    - name: Get the AMI ID from the launch template
-      run: |
-        launch_template_id="${{ secrets.AWS_LAUNCH_TEMPLATE_ID }}"
-        
-        # Query the launch template for the current AMI ID
-        current_ami_id=$(aws ec2 describe-launch-template-versions \
-          --launch-template-id $launch_template_id \
-          --query 'LaunchTemplateVersions[0].LaunchTemplateData.ImageId' \
-          --output text)
-
-        if [ "$current_ami_id" == "None" ]; then
-          echo "Failed to retrieve AMI ID from the launch template."
-          exit 1
-        fi
-
-        echo "Current AMI ID from launch template: $current_ami_id"
-        echo "PREVIOUS_AMI_ID=$current_ami_id" >> $GITHUB_ENV
-
     - name: Create AMI from EC2 instance
       id: create_ami
       run: |
@@ -60,6 +42,7 @@ jobs:
         ami_id=$(aws ec2 create-image --instance-id $instance_id --name $ami_name --no-reboot --query 'ImageId' --output text)
         echo "AMI Created: $ami_id"
         echo "ami_id=$ami_id" >> $GITHUB_ENV
+        echo "old_ami=$ami_id" >> $GITHUB_ENV  # Save this AMI ID for future reference
 
     - name: Wait for AMI to be ready
       run: |
@@ -94,7 +77,7 @@ jobs:
 
         echo "Launch template updated to use AMI: $ami_id with version: $new_template_version"
 
-    - name: Deregister Previous AMI
+    - name: Deregister Previous AMI if exists
       run: |
         previous_ami_id="${{ env.PREVIOUS_AMI_ID }}"
         if [ -n "$previous_ami_id" ]; then
@@ -115,4 +98,4 @@ jobs:
       run: |
         echo "Storing the new AMI ID for future use."
         echo "PREVIOUS_AMI_ID=${{ env.ami_id }}" >> $GITHUB_ENV
-
+        echo "old_ami=${{ env.ami_id }}" >> $GITHUB_ENV
