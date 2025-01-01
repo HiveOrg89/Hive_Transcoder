@@ -13,7 +13,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Set up AWS CLI
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -36,13 +36,18 @@ jobs:
 
     - name: Get the AMI ID from the launch template
       run: |
-        launch_template_id="{{ secrets.AWS_LAUNCH_TEMPLATE_ID }}"
+        launch_template_id="${{ secrets.AWS_LAUNCH_TEMPLATE_ID }}"
         
         # Query the launch template for the current AMI ID
         current_ami_id=$(aws ec2 describe-launch-template-versions \
           --launch-template-id $launch_template_id \
           --query 'LaunchTemplateVersions[0].LaunchTemplateData.ImageId' \
           --output text)
+
+        if [ "$current_ami_id" == "None" ]; then
+          echo "Failed to retrieve AMI ID from the launch template."
+          exit 1
+        fi
 
         echo "Current AMI ID from launch template: $current_ami_id"
         echo "PREVIOUS_AMI_ID=$current_ami_id" >> $GITHUB_ENV
