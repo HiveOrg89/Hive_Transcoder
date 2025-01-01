@@ -89,7 +89,7 @@ jobs:
     - name: Deregister Previous AMI if exists
       run: |
         # Retrieve the ImageId of the launch template
-        previous_ami_id=${{ env.PREVIOUS_AMI_ID }}
+        previous_ami_id="${{ env.PREVIOUS_AMI_ID }}"
 
         # Check if the previous AMI ID exists
         if [ -n "$previous_ami_id" ]; then
