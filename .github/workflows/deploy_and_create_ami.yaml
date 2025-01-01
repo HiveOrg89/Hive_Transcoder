@@ -99,3 +99,4 @@ jobs:
         echo "Storing the new AMI ID for future use."
         echo "PREVIOUS_AMI_ID=${{ env.ami_id }}" >> $GITHUB_ENV
         echo "old_ami=${{ env.ami_id }}" >> $GITHUB_ENV
+ 
