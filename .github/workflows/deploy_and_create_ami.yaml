@@ -22,8 +22,7 @@ jobs:
     - name: Schedule maintenance
       run: |
         # Invoke lambda with schedule maintenance function
-        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": true}' output.json
-        cat output.json
+        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --invocation-type Event --cli-binary-format raw-in-base64-out --payload "{\"under_maintenance\":true}" response.json
 
     - name: Retrieve the current AMI so we can remove and create a new one
       run: |
@@ -132,8 +131,9 @@ jobs:
         aws ec2 stop-instances --instance-ids $instance_id
         aws ec2 wait instance-stopped --instance-ids $instance_id
 
-    - name: Schedule maintenance
+    - name: Revert to Normal Operation
       run: |
         # Invoke lambda with schedule maintenance function
-        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": false}' output.json
-        cat output.json
+        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --invocation-type Event --cli-binary-format raw-in-base64-out --payload "{\"under_maintenance\":false}" response.json
+
+
