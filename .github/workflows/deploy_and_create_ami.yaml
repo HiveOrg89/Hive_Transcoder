@@ -1,0 +1,55 @@
+name: Deploy and Create AMI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up AWS CLI
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
+
+    - name: Start EC2 instance
+      id: start_instance
+      run: |
+        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
+        aws ec2 start-instances --instance-ids $instance_id
+        echo "Instance started: $instance_id"
+        aws ec2 wait instance-running --instance-ids $instance_id
+
+    - name: Execute commands via SSM
+      run: |
+        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
+        token="${{ secrets.SECRET_GITHUB_TOKEN }}"
+        command="export HOME=/root && cd /root && pm2 stop 0 && rm -rf Hive_Transcoder && git clone https://$token@github.com/HiveOrg89/Hive_Transcoder && cd Hive_Transcoder && npm install && pm2 start 0 && pm2 save"
+        aws ssm send-command --instance-ids $instance_id --document-name "AWS-RunShellScript" --parameters 'commands=["'"$command"'"]'
+
+    - name: Create AMI from EC2 instance
+      id: create_ami
+      run: |
+        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
+        ami_name="Hive_Transcoder-$(date +%Y%m%d%H%M%S)"
+        ami_id=$(aws ec2 create-image --instance-id $instance_id --name $ami_name --no-reboot --query 'ImageId' --output text)
+        echo "AMI Created: $ami_id"
+
+    - name: Wait for AMI to be ready
+      run: |
+        ami_id="${{ steps.create_ami.outputs.ami_id }}"
+        aws ec2 wait image-available --image-ids $ami_id
+        echo "AMI $ami_id is ready"
+
+    - name: Stop EC2 instance
+      run: |
+        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
+        aws ec2 stop-instances --instance-ids $instance_id
+        aws ec2 wait instance-stopped --instance-ids $instance_id
