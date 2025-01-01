@@ -27,21 +27,25 @@ jobs:
         echo "Instance started: $instance_id"
         aws ec2 wait instance-running --instance-ids $instance_id
 
-    - name: Retrieve current AMI ID associated with EC2 instance
-      id: get_current_ami
-      run: |
-        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
-        # Get the AMI ID associated with the EC2 instance
-        current_ami_id=$(aws ec2 describe-instances --instance-ids $instance_id --query 'Reservations[0].Instances[0].ImageId' --output text)
-        echo "Current AMI ID: $current_ami_id"
-        echo "current_ami_id=$current_ami_id" >> $GITHUB_ENV
-
     - name: Execute commands via SSM
       run: |
         instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
         token="${{ secrets.SECRET_GITHUB_TOKEN }}"
         command="export HOME=/root && cd /root && pm2 stop 0 && rm -rf Hive_Transcoder && git clone https://$token@github.com/HiveOrg89/Hive_Transcoder && cd Hive_Transcoder && npm install && pm2 start 0 && pm2 save"
         aws ssm send-command --instance-ids $instance_id --document-name "AWS-RunShellScript" --parameters 'commands=["'"$command"'"]'
+
+    - name: Get the AMI ID from the launch template
+      run: |
+        launch_template_id="{{ secrets.AWS_LAUNCH_TEMPLATE_ID }}"
+        
+        # Query the launch template for the current AMI ID
+        current_ami_id=$(aws ec2 describe-launch-template-versions \
+          --launch-template-id $launch_template_id \
+          --query 'LaunchTemplateVersions[0].LaunchTemplateData.ImageId' \
+          --output text)
+
+        echo "Current AMI ID from launch template: $current_ami_id"
+        echo "PREVIOUS_AMI_ID=$current_ami_id" >> $GITHUB_ENV
 
     - name: Create AMI from EC2 instance
       id: create_ami
@@ -87,11 +91,11 @@ jobs:
 
     - name: Deregister Previous AMI
       run: |
-        old_ami_id="${{ env.current_ami_id }}"
-        if [ -n "$old_ami_id" ]; then
-          echo "Deregistering previous AMI: $old_ami_id"
-          aws ec2 deregister-image --image-id $old_ami_id
-          echo "Previous AMI $old_ami_id deregistered"
+        previous_ami_id="${{ env.PREVIOUS_AMI_ID }}"
+        if [ -n "$previous_ami_id" ]; then
+          echo "Deregistering previous AMI: $previous_ami_id"
+          aws ec2 deregister-image --image-id $previous_ami_id
+          echo "Previous AMI $previous_ami_id deregistered"
         else
           echo "No previous AMI to deregister."
         fi
@@ -101,3 +105,8 @@ jobs:
         instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
         aws ec2 stop-instances --instance-ids $instance_id
         aws ec2 wait instance-stopped --instance-ids $instance_id
+
+    - name: Store current AMI ID for future reference
+      run: |
+        echo "Storing the new AMI ID for future use."
+        echo "PREVIOUS_AMI_ID=${{ env.ami_id }}" >> $GITHUB_ENV
