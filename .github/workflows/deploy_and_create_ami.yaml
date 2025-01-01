@@ -27,6 +27,15 @@ jobs:
         echo "Instance started: $instance_id"
         aws ec2 wait instance-running --instance-ids $instance_id
 
+    - name: Retrieve current AMI ID associated with EC2 instance
+      id: get_current_ami
+      run: |
+        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
+        # Get the AMI ID associated with the EC2 instance
+        current_ami_id=$(aws ec2 describe-instances --instance-ids $instance_id --query 'Reservations[0].Instances[0].ImageId' --output text)
+        echo "Current AMI ID: $current_ami_id"
+        echo "current_ami_id=$current_ami_id" >> $GITHUB_ENV
+
     - name: Execute commands via SSM
       run: |
         instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
@@ -41,12 +50,51 @@ jobs:
         ami_name="Hive_Transcoder-$(date +%Y%m%d%H%M%S)"
         ami_id=$(aws ec2 create-image --instance-id $instance_id --name $ami_name --no-reboot --query 'ImageId' --output text)
         echo "AMI Created: $ami_id"
+        echo "ami_id=$ami_id" >> $GITHUB_ENV
 
     - name: Wait for AMI to be ready
       run: |
-        ami_id="${{ steps.create_ami.outputs.ami_id }}"
+        ami_id="${{ env.ami_id }}"
         aws ec2 wait image-available --image-ids $ami_id
         echo "AMI $ami_id is ready"
+
+    - name: Update Launch Template with new AMI
+      run: |
+        ami_id="${{ env.ami_id }}"
+        launch_template_name="transcoder_template"
+
+        # Get the latest version number of the launch template
+        latest_version=$(aws ec2 describe-launch-templates --launch-template-names $launch_template_name \
+          --query 'LaunchTemplates[0].LatestVersionNumber' --output text)
+
+        echo "Latest launch template version: $latest_version"
+
+        # Create a new version of the launch template with the updated AMI
+        new_template_version=$(aws ec2 create-launch-template-version \
+          --launch-template-name $launch_template_name \
+          --source-version $latest_version \
+          --launch-template-data "{\"ImageId\":\"$ami_id\"}" \
+          --query 'LaunchTemplateVersion.VersionNumber' --output text)
+
+        echo "New launch template version created: $new_template_version"
+
+        # Set the new version as the default for the launch template
+        aws ec2 modify-launch-template \
+          --launch-template-name $launch_template_name \
+          --default-version $new_template_version
+
+        echo "Launch template updated to use AMI: $ami_id with version: $new_template_version"
+
+    - name: Deregister Previous AMI
+      run: |
+        old_ami_id="${{ env.current_ami_id }}"
+        if [ -n "$old_ami_id" ]; then
+          echo "Deregistering previous AMI: $old_ami_id"
+          aws ec2 deregister-image --image-id $old_ami_id
+          echo "Previous AMI $old_ami_id deregistered"
+        else
+          echo "No previous AMI to deregister."
+        fi
 
     - name: Stop EC2 instance
       run: |
