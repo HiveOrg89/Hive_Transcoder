@@ -24,8 +24,12 @@ jobs:
         # Retrieve the ImageId of the launch template
         previous_ami_id=$(aws ec2 describe-launch-template-versions --launch-template-id lt-0de5977b4f1add85d --query "LaunchTemplateVersions[0].LaunchTemplateData.ImageId" --output text)
 
+        #Retrieve snapshot_id
+        snapshot_id=$(aws ec2 describe-images --image-ids $previous_ami_id --query "Images[0].BlockDeviceMappings[0].Ebs.SnapshotId" --output text)
+
         # store this in environment variable
         echo "PREVIOUS_AMI_ID=$previous_ami_id" >> $GITHUB_ENV
+        echo "PREVIOUS_SNAPSHOT_ID=$snapshot_id" >> $GITHUB_ENV
 
 
     - name: Start EC2 instance
@@ -86,21 +90,6 @@ jobs:
 
         echo "Launch template updated to use AMI: $ami_id with version: $new_template_version"
 
-    - name: Delete old Snapshot
-      run: |      
-          previous_ami_id="${{ env.PREVIOUS_AMI_ID }}"
-          # Retrieve the snapshot ID associated with the AMI
-          snapshot_id=$(aws ec2 describe-images --image-ids $previous_ami_id --query "Images[0].BlockDeviceMappings[0].Ebs.SnapshotId" --output text)
-          
-          # Deregister the snapshot if it exists
-          if [ -n "$snapshot_id" ]; then
-            echo "Deregistering snapshot: $snapshot_id"
-            aws ec2 delete-snapshot --snapshot-id $snapshot_id
-            echo "Snapshot $snapshot_id deleted"
-          else
-            echo "No snapshot associated with AMI $previous_ami_id"
-          fi
-
     - name: Deregister Previous AMI if exists
       run: |
         # Retrieve the ImageId of the launch template
@@ -116,6 +105,20 @@ jobs:
         else
           echo "No previous AMI to deregister."
         fi
+
+    - name: Delete old Snapshot
+      run: |      
+          # Retrieve the snapshot ID associated with the AMI
+          snapshot_id="${{ env.PREVIOUS_SNAPSHOT_ID }}"
+          
+          # Deregister the snapshot if it exists
+          if [ -n "$snapshot_id" ]; then
+            echo "Deregistering snapshot: $snapshot_id"
+            aws ec2 delete-snapshot --snapshot-id $snapshot_id
+            echo "Snapshot $snapshot_id deleted"
+          else
+            echo "No snapshot associated with AMI $previous_ami_id"
+          fi
 
     - name: Stop EC2 instance
       run: |
