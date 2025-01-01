@@ -19,11 +19,6 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ap-south-1
     
-    - name: Schedule maintenance
-      run: |
-        #Invoke lambda with schedule maintenance function
-        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": true}' --output text 
-
     - name: Retrieve the current AMI so we can remove and create a new one
       run: |
         # Retrieve the ImageId of the launch template
@@ -130,8 +125,3 @@ jobs:
         instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
         aws ec2 stop-instances --instance-ids $instance_id
         aws ec2 wait instance-stopped --instance-ids $instance_id
-
-      - name: Revert to normal operation
-      run: |
-        #Invoke lambda with schedule maintenance function
-        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": false}' --output text
