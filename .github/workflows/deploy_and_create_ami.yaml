@@ -21,8 +21,7 @@ jobs:
     
     - name: Schedule maintenance
       run: |
-        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": true}' output.json
-        cat output.json
+        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": true}' --output text 
 
     - name: Retrieve the current AMI so we can remove and create a new one
       run: |
@@ -133,5 +132,4 @@ jobs:
 
       - name: Revert to normal operation
       run: |
-        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": false}' output.json
-        cat output.json
+        aws lambda invoke --function-name ${{ secrets.AWS_SCHEDULER_LAMBDA_ARN }} --payload '{"under_maintenance": false}' --output text
