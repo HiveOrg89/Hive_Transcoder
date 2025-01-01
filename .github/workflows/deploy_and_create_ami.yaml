@@ -19,6 +19,15 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ap-south-1
 
+    - name: Retrieve the current AMI so we can remove and create a new one
+      run: |
+        # Retrieve the ImageId of the launch template
+        previous_ami_id=$(aws ec2 describe-launch-template-versions --launch-template-id lt-0de5977b4f1add85d --query "LaunchTemplateVersions[0].LaunchTemplateData.ImageId" --output text)
+
+        # store this in environment variable
+        echo "PREVIOUS_AMI_ID=$previous_ami_id" >> $GITHUB_ENV
+
+
     - name: Start EC2 instance
       id: start_instance
       run: |
@@ -80,7 +89,7 @@ jobs:
     - name: Deregister Previous AMI if exists
       run: |
         # Retrieve the ImageId of the launch template
-        previous_ami_id=$(aws ec2 describe-launch-template-versions --launch-template-id lt-0de5977b4f1add85d --query "LaunchTemplateVersions[0].LaunchTemplateData.ImageId" --output text)
+        previous_ami_id=${{ env.PREVIOUS_AMI_ID }}
 
         # Check if the previous AMI ID exists
         if [ -n "$previous_ami_id" ]; then
