@@ -98,7 +98,13 @@ jobs:
           # Deregister the AMI
           aws ec2 deregister-image --image-id $previous_ami_id
           echo "Previous AMI $previous_ami_id deregistered"
+        else
+          echo "No previous AMI to deregister."
+        fi
 
+    - name: Delete old Snapshot
+      run: |      
+          previous_ami_id="${{ env.PREVIOUS_AMI_ID }}"
           # Retrieve the snapshot ID associated with the AMI
           snapshot_id=$(aws ec2 describe-images --image-ids $previous_ami_id --query "Images[0].BlockDeviceMappings[0].Ebs.SnapshotId" --output text)
           
@@ -110,9 +116,6 @@ jobs:
           else
             echo "No snapshot associated with AMI $previous_ami_id"
           fi
-        else
-          echo "No previous AMI to deregister."
-        fi
 
     - name: Stop EC2 instance
       run: |
