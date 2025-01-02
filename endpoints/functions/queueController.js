@@ -83,11 +83,13 @@ async function addJob(videoToAdd) {
         currentJobs.push(videoToAdd);
 
         // Set up a transcoding task for the video
-        setUpTranscodingJobs(videoToAdd ? [videoToAdd] : []);
+        setUpTranscodingJobs([videoToAdd]);
       }
     } catch (err) {
       console.error("Error adding job: ", err);
     }
+  } else {
+    setUpTranscodingJobs([]);
   }
 }
 
