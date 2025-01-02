@@ -8,31 +8,60 @@ require("dotenv").config();
 let retries = 0;
 
 const terminateInstance = async (instanceId) => {
-  const { ec2 } = await AWSServices();
+  const { ec2, ASG } = await AWSServices();
+  const secrets = await getSecrets();
 
-  const instanceData = await ec2
-    .describeInstances({ InstanceIds: [instanceId] })
-    .promise();
-  const state =
-    instanceData.Reservations[0].Instances[0].State.Name;
+  try {
+    const asgName = secrets.ASG_NAME;
+    // Get the current desired capacity of the Auto Scaling Group
+    const asgData = await ASG.describeAutoScalingGroups({
+      AutoScalingGroupNames: [asgName],
+    }).promise();
 
-  if (state === "running") {
-    await ec2
-      .terminateInstances({ InstanceIds: [instanceId] })
+    const currentDesiredCapacity = asgData.AutoScalingGroups[0].DesiredCapacity;
+
+    if (currentDesiredCapacity > 0) {
+      // Reduce the desired capacity by one
+      await ASG.updateAutoScalingGroup({
+        AutoScalingGroupName: asgName,
+        DesiredCapacity: currentDesiredCapacity - 1,
+      }).promise();
+
+      console.log(
+        `Reduced desired capacity of ASG '${asgName}' to ${
+          currentDesiredCapacity - 1
+        }`
+      );
+    } else {
+      console.log(
+        `Desired capacity for ASG '${asgName}' is already at minimum.`
+      );
+    }
+
+    // Check the state of the instance
+    const instanceData = await ec2
+      .describeInstances({ InstanceIds: [instanceId] })
       .promise();
-    console.log(`Terminated instance: ${instanceId}`);
-  } else {
-    console.log(
-      `Instance ${instanceId} is already in the desired state: ${state}`
-    );
+    const state = instanceData.Reservations[0].Instances[0].State.Name;
+
+    if (state === "running") {
+      // Terminate the instance
+      await ec2.terminateInstances({ InstanceIds: [instanceId] }).promise();
+      console.log(`Terminated instance: ${instanceId}`);
+    } else {
+      console.log(
+        `Instance ${instanceId} is already in the desired state: ${state}`
+      );
+    }
+  } catch (error) {
+    console.error(`Error terminating instance: ${error.message}`);
   }
 };
 
 const stopInstance = async (instanceId) => {
   const { ec2 } = await AWSServices();
 
-  const otherRunningInstancesExist =
-    await checkRunningInstances();
+  const otherRunningInstancesExist = await checkRunningInstances();
   if (otherRunningInstancesExist) {
     setUpTranscodingJobs([]);
     return;
@@ -40,13 +69,10 @@ const stopInstance = async (instanceId) => {
   const instanceData = await ec2
     .describeInstances({ InstanceIds: [instanceId] })
     .promise();
-  const state =
-    instanceData.Reservations[0].Instances[0].State.Name;
+  const state = instanceData.Reservations[0].Instances[0].State.Name;
 
   if (state === "running") {
-    await ec2
-      .stopInstances({ InstanceIds: [instanceId] })
-      .promise();
+    await ec2.stopInstances({ InstanceIds: [instanceId] }).promise();
     console.log(`Stopped instance: ${instanceId}`);
   } else {
     console.log(

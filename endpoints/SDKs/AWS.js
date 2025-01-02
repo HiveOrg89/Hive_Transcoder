@@ -18,8 +18,9 @@ const AWSServices = async () => {
   // Create and return service clients
   const s3 = new AWS.S3();
   const ec2 = new AWS.EC2();
+  const ASG = new AWS.AutoScaling();
 
-  return { s3, ec2 };
+  return { s3, ec2, ASG };
 };
 
 module.exports = AWSServices;
