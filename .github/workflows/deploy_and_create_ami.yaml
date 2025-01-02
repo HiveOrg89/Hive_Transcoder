@@ -50,7 +50,13 @@ jobs:
         instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
         token="${{ secrets.SECRET_GITHUB_TOKEN }}"
         command="export HOME=/root && cd /root && pm2 stop 0 && rm -rf Hive_Transcoder && git clone https://$token@github.com/HiveOrg89/Hive_Transcoder && cd Hive_Transcoder && npm install && pm2 start 0 && pm2 save"
-        aws ssm send-command --instance-ids $instance_id --document-name "AWS-RunShellScript" --parameters 'commands=["'"$command"'"]'
+        # Send the command to EC2 via SSM
+        command_id=$(aws ssm send-command --instance-ids $instance_id --document-name "AWS-RunShellScript" --parameters 'commands=["'"$command"'"]' --query "Command.CommandId" --output text)
+        echo "SSM Command ID: $command_id"
+        
+        # Wait until the SSM command is successful
+        aws ssm wait command-executed --instance-id $instance_id --command-id $command_id
+        echo "SSM command execution completed."
 
     - name: Create AMI from EC2 instance
       id: create_ami
