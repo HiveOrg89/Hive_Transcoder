@@ -58,6 +58,12 @@ jobs:
         aws ssm wait command-executed --instance-id $instance_id --command-id $command_id
         echo "SSM command execution completed."
 
+    - name: Stop EC2 instance
+      run: |
+        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
+        aws ec2 stop-instances --instance-ids $instance_id
+        aws ec2 wait instance-stopped --instance-ids $instance_id
+
     - name: Create AMI from EC2 instance
       id: create_ami
       run: |
@@ -130,12 +136,6 @@ jobs:
           else
             echo "No snapshot associated with AMI $previous_ami_id"
           fi
-
-    - name: Stop EC2 instance
-      run: |
-        instance_id="${{ secrets.AWS_BASE_INSTANCE_ID }}"
-        aws ec2 stop-instances --instance-ids $instance_id
-        aws ec2 wait instance-stopped --instance-ids $instance_id
 
     - name: Revert to Normal Operation
       run: |
